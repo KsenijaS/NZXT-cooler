@@ -3,6 +3,11 @@ from collections import namedtuple
 import sys
 import usb.core
 import itertools
+import threading
+import time
+import subprocess
+import re
+import math
 
 VENDOR = 0x1e71
 PRODUCT = 0x170e
@@ -21,6 +26,9 @@ class KrakenX52:
   MODE_SPECTRUM_WAVE = Mode('SpectrumWave', (2, 1))
   COLOR_MODES = [MODE_SOLID, MODE_SOLID_ALL, MODE_BREATHING, MODE_PULSE,
 		 MODE_FADING, MODE_COVERING_MARQUEE, MODE_SPECTRUM_WAVE]
+  MIN_AUTO_FAN_PERCENT = 40
+  AUTO_ROUND_TO = 5
+  SENSOR_DELAY = 5
 
   @classmethod
   def _check_color(cls, color):
@@ -49,6 +57,12 @@ class KrakenX52:
     if self._pspeed < 60 or self._pspeed > 100 or not isinstance(self._pspeed, int):
       raise ValueError("Pump speed must be integer number between 60 and 100")
 
+    if self._max_safe_temp < 30 or self._max_safe_temp > 85 or not isinstance(self._max_safe_temp, int):
+      raise ValueError("The maximum safe temprature must be between 30 and 85")
+
+    if not isinstance(self._sensor_control, bool):
+      raise ValueError("Sensor control must be True or False")
+
     self._check_color(self._text_color)
 
     for j in range(self._color_count):
@@ -73,6 +87,12 @@ class KrakenX52:
     self._fspeed = kwargs.pop('fspeed', 30)
 
     self._pspeed = kwargs.pop('pspeed', 60)
+
+    self._sensor_control = kwargs.pop('sensor_control', False)
+
+    self._max_safe_temp = kwargs.pop('max_safe_temp', 80)
+
+    self._thread_quit = False
 
   def _mode_bytes(self, i=0):
     # set the higher 3 bits of the 2rd byte to denote the number of colors being set
@@ -134,9 +154,54 @@ class KrakenX52:
             'pump_speed': pump_speed,
             'liquid_temperature': liquid_temperature}
 
+  def _get_cpu_temp(self):
+    sensors = subprocess.check_output("sensors").decode('utf-8')
+    temperatures = {match[0]: float(match[1]) for match in re.findall("^(.*?)\:\s+\+?(.*?)°C", sensors, re.MULTILINE)}
+    return temperatures['CPUTIN']
+
+  def _sensor_thread(self):
+    while not self._thread_quit:
+        current_temp = self._get_cpu_temp()
+        diff_perc = 1.0 - ((self._max_safe_temp - current_temp) / self._max_safe_temp)
+        diff_perc *= 100
+        # I round to the nearest AUTO_ROUND_TO for the speed. Just to be safe.
+        fs_speed = math.ceil(diff_perc/self.AUTO_ROUND_TO) * self.AUTO_ROUND_TO
+        # minimum speed of 60 percent max speed of a 100
+        fs_speed = min(max(self.MIN_AUTO_FAN_PERCENT, fs_speed), 100)
+        ps_speed = min(max(60, fs_speed), 100)
+
+        print("CPU Temprature: ", current_temp, "C. Caculated Fan Speed:", fs_speed, "Calcuated pump speed", ps_speed)
+        self._fspeed = fs_speed
+        self._pspeed = ps_speed
+        self._validate()
+        self._send_fan_speed()
+        self._send_pump_speed()
+        time.sleep(self.SENSOR_DELAY)
+
+  def _start_sensor_thread(self):
+    t1 = threading.Thread(target=self._sensor_thread) 
+    t1.deamon = True
+    t1.start()
+    while True:
+        # Keep main thread alive until kill is required
+        try:
+            time.sleep(1)
+        except (KeyboardInterrupt, SystemExit):
+            print("Shutting down colctl sensor deamon...")
+            self._thread_quit = True
+            t1.join()
+            return
+
+
   def update(self):
     self._validate()
     self._send_color()
-    self._send_fan_speed()
-    self._send_pump_speed()
-    return self._receive_status()
+    print(self._sensor_control)
+    if not self._sensor_control:
+      self._send_fan_speed()
+      self._send_pump_speed()
+      return self._receive_status()
+    else:
+      print("Starting thread")
+      self._start_sensor_thread()
+

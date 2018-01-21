@@ -87,7 +87,13 @@ def main():
                         help="Speed between 60 and 100")
     parser.add_argument('-s', '--status', action='store_true', help="Print pump status, does not update if set.")
 
+    parser.add_argument('-sc', '--sensor_control', dest='sensor_control', action='store_true',
+                        help="Start automatic control deamon using lm_sensors")
 
+    parser.add_argument('-smt', '--safe-max-temp', dest='safe_max_temp', type=int, default=80,
+                        help="The maximum safe temprature for your cpu. Used for Sensor Cotrol deamon")
+
+    parser.set_defaults(sensor_control=False)
     args = parser.parse_args()
     varg = vars(args)
 
