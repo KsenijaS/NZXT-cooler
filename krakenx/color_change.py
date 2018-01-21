@@ -196,12 +196,11 @@ class KrakenX52:
   def update(self):
     self._validate()
     self._send_color()
-    print(self._sensor_control)
     if not self._sensor_control:
       self._send_fan_speed()
       self._send_pump_speed()
       return self._receive_status()
     else:
-      print("Starting thread")
+      print("Starting thread...")
       self._start_sensor_thread()
 
