@@ -35,7 +35,7 @@ def _color_mode(arg):
         return KrakenX52.MODE_COVERING_MARQUEE
     if arg.lower() == 'spectrumwave':
         return KrakenX52.MODE_SPECTRUM_WAVE
-    
+
     raise argparse.ArgumentTypeError("color mode must be Solid, SolidAll, Breathing, "
                                       "Pulse, Fading, CoveringMarquee, SpectrumWave")
 
@@ -79,7 +79,7 @@ def main():
 
     parser.add_argument('-as', '--animation_speed', dest='aspeed', type=int, default=0,
                         help="Speed between 0 and 4")
-   
+
     parser.add_argument('-fs', '--fan_speed', dest='fspeed', type=int, default=30,
                         help="Speed between 25 and 100")
 
@@ -92,20 +92,20 @@ def main():
     varg = vars(args)
 
     devices = list(usb.core.find(idVendor=VENDOR, idProduct=PRODUCT, find_all=True))
-    dev = devices[0]
 
+    for d in range(0, len(devices)):
+        dev = devices[d]
+        if dev.is_kernel_driver_active(d):
+           dev.detach_kernel_driver(d)
 
-    if dev.is_kernel_driver_active(0):
-       dev.detach_kernel_driver(0)
+        dev.set_configuration()
 
-    dev.set_configuration()
+        cooler = KrakenX52(dev, **varg)
 
-    cooler = KrakenX52(dev, **varg)
-    
-    if args.status:
-      cooler.print_status()
-    else:
-      cooler.update()
+        if args.status:
+          cooler.print_status()
+        else:
+          cooler.update()
 
 if __name__ == '__main__':
     main()
