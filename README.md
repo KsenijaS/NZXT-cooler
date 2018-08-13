@@ -51,6 +51,12 @@ but I could not verify that the flag works because I can't read fan and pump
 speed on my AMD B350 motherboard. If flags are not set, pump speed will have
 default value of 60% and fan speed 30%. 
 
+**Automatic fan and pumpcontrol**
+
+Use the flag --sensor-control to enable the automatic fan speed and pump speed.
+Please make sure the lm_sensors package is installed and configured.
+If you want to change the maximum allowed temprature use --max-safe-temp to change it. Default 80 degrees celcius.
+
 See also colctl --help
 
 Note: Solid and Solid All mode settings are not remembered after restart, I
