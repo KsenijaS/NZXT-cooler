@@ -87,10 +87,12 @@ class KrakenX52:
     return (self._mode.mode[0], self._aspeed)
 
   def _send_pump_speed(self):
-    self.dev.write(0x01, [0x02, 0x4d, 0x40, 0x00, self._pspeed])
+    for i, temp in enumerate(range(0, 105, 5)):
+      self.dev.write(0x01, [0x02, 0x4d, 0xc0 + i, temp, self._pspeed if temp < 60 else 100])
 
   def _send_fan_speed(self):
-    self.dev.write(0x01, [0x02, 0x4d, 0x00, 0x00, self._fspeed])
+    for i, temp in enumerate(range(0, 105, 5)):
+      self.dev.write(0x01, [0x02, 0x4d, 0x80 + i, temp, self._fspeed if temp < 60 else 100])
 
   def _send_color(self):
     if self._mode==self.MODE_SOLID:
